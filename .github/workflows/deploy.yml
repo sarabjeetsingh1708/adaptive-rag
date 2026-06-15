@@ -19,7 +19,7 @@ jobs:
 
       - name: Skip deploy when Fly token is missing
         if: env.FLY_API_TOKEN == ''
-        run: echo "FLY_API_TOKEN is not configured; skipping deploy."
+        run: echo "::warning::FLY_API_TOKEN is not configured; skipping deploy."
 
       - name: Deploy
         if: env.FLY_API_TOKEN != ''
