@@ -240,20 +240,7 @@ Zero infrastructure, works on Fly.io's persistent volume, good enough for thousa
 **Why not stream responses?**  
 Streaming and the hallucination detector are incompatible — you can't grade a partial answer. For v2, the architecture would split: stream the generation, run the detector async, and send a correction message if the score is too low.
 
----
 
-## Interview talking points
-
-Run `python scripts/interview_prep.py` for a 16-question interactive drill covering system design, tradeoffs, ML fundamentals, and production thinking.
-
-Key numbers to know cold:
-- `MIN_PASSING = 2` — chunks needed to avoid re-routing
-- `0.6` — hallucination score threshold for regeneration
-- `0.8` — threshold for "grounded" verdict
-- `hnsw_ef = 128` — Qdrant search accuracy parameter
-- `384` — embedding dimensions (all-MiniLM-L6-v2)
-- `41` — total tests passing
-- `35.6%` — overall improvement over naive baseline
 
 ---
 
