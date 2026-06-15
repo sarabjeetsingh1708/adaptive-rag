@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adaptive RAG — ArXiv AI/ML</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Reset & tokens ──────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0b0e14;
+      --surface:   #111520;
+      --surface2:  #181d2b;
+      --border:    #232940;
+      --accent:    #4f8ef7;
+      --accent2:   #7c5af7;
+      --green:     #3dd68c;
+      --yellow:    #f7c948;
+      --red:       #f75a5a;
+      --text:      #e2e8f7;
+      --muted:     #6b7494;
+      --mono:      'IBM Plex Mono', monospace;
+      --sans:      'DM Sans', sans-serif;
+    }
+
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.6; }
+
+    /* ── Layout ─────────────────────────────────────────────── */
+    .shell { display: grid; grid-template-rows: 56px 1fr; height: 100vh; }
+
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px; border-bottom: 1px solid var(--border);
+      background: var(--surface); position: sticky; top: 0; z-index: 100;
+    }
+    .logo { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: .04em; }
+    .logo span { color: var(--muted); }
+    .tabs { display: flex; gap: 4px; }
+    .tab {
+      font-size: 13px; font-family: var(--mono); padding: 6px 16px;
+      border-radius: 6px; cursor: pointer; border: 1px solid transparent;
+      color: var(--muted); transition: all .15s;
+    }
+    .tab:hover { color: var(--text); border-color: var(--border); }
+    .tab.active { color: var(--accent); border-color: var(--accent); background: rgba(79,142,247,.07); }
+    .pill {
+      font-size: 11px; font-family: var(--mono); padding: 3px 10px;
+      border-radius: 20px; background: rgba(61,214,140,.1); color: var(--green);
+      border: 1px solid rgba(61,214,140,.2);
+    }
+
+    /* ── Pages ──────────────────────────────────────────────── */
+    .page { display: none; height: 100%; overflow: hidden; }
+    .page.active { display: flex; }
+
+    /* ── Chat page ──────────────────────────────────────────── */
+    #chat-page { flex-direction: row; }
+
+    .sidebar {
+      width: 280px; min-width: 280px; border-right: 1px solid var(--border);
+      background: var(--surface); display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-header {
+      padding: 16px 18px 12px; border-bottom: 1px solid var(--border);
+      font-size: 11px; font-family: var(--mono); color: var(--muted); letter-spacing: .06em; text-transform: uppercase;
+    }
+    .sources-list { flex: 1; overflow-y: auto; padding: 10px; }
+    .source-card {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;
+      opacity: 0; transform: translateY(8px);
+      transition: opacity .3s, transform .3s;
+    }
+    .source-card.visible { opacity: 1; transform: translateY(0); }
+    .source-title { font-size: 12px; font-weight: 500; color: var(--text); margin-bottom: 4px; line-height: 1.4; }
+    .source-meta { display: flex; gap: 8px; align-items: center; }
+    .score-bar-wrap { flex: 1; height: 3px; background: var(--border); border-radius: 2px; }
+    .score-bar { height: 3px; border-radius: 2px; background: var(--accent); transition: width .5s; }
+    .score-val { font-size: 11px; font-family: var(--mono); color: var(--muted); }
+    .source-text { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+
+    .chat-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+    .msg { display: flex; gap: 12px; animation: fadeUp .3s ease; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; } }
+
+    .msg-avatar {
+      width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-family: var(--mono); font-weight: 500;
+    }
+    .msg.user .msg-avatar { background: rgba(79,142,247,.15); color: var(--accent); }
+    .msg.assistant .msg-avatar { background: rgba(124,90,247,.15); color: var(--accent2); }
+
+    .msg-body { flex: 1; }
+    .msg-meta { font-size: 11px; font-family: var(--mono); color: var(--muted); margin-bottom: 4px; display: flex; gap: 12px; align-items: center; }
+    .path-badge {
+      font-size: 10px; padding: 1px 7px; border-radius: 10px;
+      border: 1px solid var(--border); color: var(--muted);
+    }
+    .path-badge.direct   { border-color: rgba(61,214,140,.3); color: var(--green); }
+    .path-badge.rewritten{ border-color: rgba(247,201,72,.3);  color: var(--yellow); }
+    .path-badge.web_fallback { border-color: rgba(247,90,90,.3); color: var(--red); }
+    .msg-text { font-size: 14px; line-height: 1.75; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+    .hal-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .hal-label { font-size: 11px; font-family: var(--mono); color: var(--muted); }
+    .hal-bar-wrap { width: 80px; height: 3px; background: var(--border); border-radius: 2px; }
+    .hal-bar { height: 3px; border-radius: 2px; }
+
+    .typing { display: flex; gap: 5px; padding: 4px 0; }
+    .typing span {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+      animation: bounce .9s infinite; opacity: .5;
+    }
+    .typing span:nth-child(2) { animation-delay: .15s; }
+    .typing span:nth-child(3) { animation-delay: .30s; }
+    @keyframes bounce { 0%,80%,100% { transform: translateY(0); } 40% { transform: translateY(-5px); opacity: 1; } }
+
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 16px; text-align: center; padding: 40px;
+    }
+    .empty-icon { font-size: 40px; opacity: .3; }
+    .empty-title { font-size: 18px; font-weight: 500; color: var(--text); }
+    .empty-sub { font-size: 13px; color: var(--muted); max-width: 360px; }
+    .suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
+    .suggestion {
+      font-size: 12px; padding: 7px 14px; border-radius: 20px;
+      border: 1px solid var(--border); color: var(--muted); cursor: pointer;
+      transition: all .15s; background: var(--surface2);
+    }
+    .suggestion:hover { border-color: var(--accent); color: var(--accent); }
+
+    .input-bar {
+      padding: 16px 24px; border-top: 1px solid var(--border); background: var(--surface);
+      display: flex; gap: 10px; align-items: flex-end;
+    }
+    textarea {
+      flex: 1; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 14px; color: var(--text); font-family: var(--sans);
+      font-size: 14px; resize: none; outline: none; min-height: 44px; max-height: 140px;
+      line-height: 1.5; transition: border-color .15s;
+    }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: var(--muted); }
+    .send-btn {
+      width: 44px; height: 44px; border-radius: 10px; border: none; cursor: pointer;
+      background: var(--accent); color: #fff; font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s, transform .1s; flex-shrink: 0;
+    }
+    .send-btn:hover { background: #6ba3ff; }
+    .send-btn:active { transform: scale(.96); }
+    .send-btn:disabled { background: var(--border); cursor: not-allowed; transform: none; }
+
+    /* ── Dashboard page ─────────────────────────────────────── */
+    #dash-page { flex-direction: column; overflow-y: auto; }
+    .dash-inner { padding: 32px; max-width: 1100px; margin: 0 auto; width: 100%; }
+    .dash-title { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+    .dash-sub { font-size: 13px; color: var(--muted); margin-bottom: 32px; }
+
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 28px; }
+    .kpi {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px 20px;
+    }
+    .kpi-label { font-size: 11px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+    .kpi-val { font-size: 28px; font-weight: 600; font-family: var(--mono); color: var(--text); }
+    .kpi-delta { font-size: 12px; font-family: var(--mono); margin-top: 4px; }
+    .kpi-delta.up { color: var(--green); }
+    .kpi-delta.down { color: var(--red); }
+
+    .section-title { font-size: 13px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; }
+
+    .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
+    .chart-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px; position: relative;
+    }
+    .chart-card canvas { max-height: 220px; }
+
+    .comparison-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 28px; }
+    .comparison-table th {
+      text-align: left; padding: 10px 16px; font-family: var(--mono);
+      font-size: 11px; color: var(--muted); font-weight: 400;
+      border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: .04em;
+    }
+    .comparison-table td { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .comparison-table tr:last-child td { border-bottom: none; }
+    .comparison-table tr:hover td { background: var(--surface2); }
+    .metric-name { font-family: var(--mono); color: var(--text); }
+    .naive-val { color: var(--muted); font-family: var(--mono); }
+    .adaptive-val { color: var(--text); font-family: var(--mono); font-weight: 500; }
+    .delta-val { font-family: var(--mono); }
+    .delta-val.pos { color: var(--green); }
+    .delta-val.neg { color: var(--red); }
+
+    .path-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 28px; }
+    .path-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 20px;
+    }
+    .path-name { font-size: 12px; font-family: var(--mono); color: var(--muted); margin-bottom: 6px; }
+    .path-count { font-size: 32px; font-weight: 600; font-family: var(--mono); }
+    .path-pct { font-size: 12px; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+
+    .no-data {
+      text-align: center; padding: 60px 20px; color: var(--muted);
+      font-size: 14px; border: 1px dashed var(--border); border-radius: 12px;
+    }
+    .no-data code { font-family: var(--mono); font-size: 12px; background: var(--surface2); padding: 2px 6px; border-radius: 4px; }
+
+    .refresh-btn {
+      font-size: 12px; font-family: var(--mono); padding: 6px 14px;
+      border-radius: 6px; border: 1px solid var(--border); background: none;
+      color: var(--muted); cursor: pointer; transition: all .15s; float: right;
+    }
+    .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* scrollbars */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Nav -->
+  <nav>
+    <div class="logo">adaptive<span>-rag</span> <span style="color:var(--border)">|</span> arxiv ai/ml</div>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('chat')">Chat</div>
+      <div class="tab" onclick="switchTab('dash')">Eval Dashboard</div>
+    </div>
+    <div class="pill" id="status-pill">● connecting</div>
+  </nav>
+
+  <!-- Chat Page -->
+  <div class="page active" id="chat-page">
+    <div class="sidebar">
+      <div class="sidebar-header">Retrieved Sources</div>
+      <div class="sources-list" id="sources-list">
+        <div style="padding:20px 12px; text-align:center; color:var(--muted); font-size:12px; font-family:var(--mono);">
+          Sources appear here after each query
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-main">
+      <div class="messages" id="messages">
+        <div class="empty-state" id="empty-state">
+          <div class="empty-icon">⬡</div>
+          <div class="empty-title">Ask about AI & ML research</div>
+          <div class="empty-sub">Powered by 500+ ArXiv papers with adaptive retrieval, self-evaluation, and hallucination detection.</div>
+          <div class="suggestions">
+            <div class="suggestion" onclick="sendSuggestion(this)">How does RAG reduce hallucinations?</div>
+            <div class="suggestion" onclick="sendSuggestion(this)">What is chain of thought prompting?</div>
+            <div class="suggestion" onclick="sendSuggestion(this)">How does LoRA enable efficient fine-tuning?</div>
+            <div class="suggestion" onclick="sendSuggestion(this)">What are the limits of RLHF?</div>
+            <div class="suggestion" onclick="sendSuggestion(this)">How does attention mechanism work?</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-bar">
+        <textarea id="input" placeholder="Ask anything about AI/ML research..." rows="1"
+          onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button class="send-btn" id="send-btn" onclick="sendQuery()" title="Send">↑</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard Page -->
+  <div class="page" id="dash-page">
+    <div class="dash-inner">
+      <div style="display:flex; align-items:flex-start; justify-content:space-between;">
+        <div>
+          <div class="dash-title">Evaluation Dashboard</div>
+          <div class="dash-sub">Live RAGAS-style metrics — naive RAG vs adaptive RAG</div>
+        </div>
+        <button class="refresh-btn" onclick="loadDashboard()">↻ Refresh</button>
+      </div>
+      <div id="dash-content">
+        <div class="no-data">Loading evaluation data...</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────
+const API = '';   // same origin
+let isLoading = false;
+let chartInstances = {};
+
+// ── Tab switching ─────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['chat','dash'][i] === name));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(name + '-page').classList.add('active');
+  if (name === 'dash') loadDashboard();
+}
+
+// ── Health check ──────────────────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch(API + '/health');
+    const pill = document.getElementById('status-pill');
+    if (r.ok) { pill.textContent = '● live'; pill.style.color = 'var(--green)'; pill.style.borderColor = 'rgba(61,214,140,.3)'; pill.style.background = 'rgba(61,214,140,.07)'; }
+    else throw new Error();
+  } catch { document.getElementById('status-pill').textContent = '● offline'; }
+}
+checkHealth();
+
+// ── Chat ──────────────────────────────────────────────────────────────────
+function handleKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuery(); } }
+function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 140) + 'px'; }
+function sendSuggestion(el) { document.getElementById('input').value = el.textContent; sendQuery(); }
+
+async function sendQuery() {
+  const input = document.getElementById('input');
+  const q = input.value.trim();
+  if (!q || isLoading) return;
+
+  isLoading = true;
+  document.getElementById('send-btn').disabled = true;
+  document.getElementById('empty-state')?.remove();
+  input.value = ''; input.style.height = 'auto';
+
+  // User bubble
+  appendMessage('user', q);
+
+  // Typing indicator
+  const typingId = 'typing-' + Date.now();
+  appendTyping(typingId);
+
+  // Clear sources
+  document.getElementById('sources-list').innerHTML = '';
+
+  try {
+    const res = await fetch(API + '/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q, top_k: 5 }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+
+    document.getElementById(typingId)?.remove();
+    appendMessage('assistant', data.answer, data);
+
+    // Render sources in sidebar
+    renderSources(data.retrieved_chunks || []);
+  } catch (err) {
+    document.getElementById(typingId)?.remove();
+    appendMessage('assistant', '⚠ Error: ' + err.message);
+  } finally {
+    isLoading = false;
+    document.getElementById('send-btn').disabled = false;
+    input.focus();
+  }
+}
+
+function appendMessage(role, text, meta = null) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+
+  const avatar = role === 'user' ? 'U' : 'AI';
+  const label = role === 'user' ? 'You' : 'Adaptive RAG';
+
+  let metaHtml = '';
+  let halHtml = '';
+  if (meta) {
+    const pathClass = meta.retrieval_path || 'direct';
+    const latency = meta.latency_ms ? (meta.latency_ms / 1000).toFixed(1) + 's' : '';
+    metaHtml = `<span class="path-badge ${pathClass}">${pathClass}</span><span>${latency}</span>`;
+
+    if (meta.hallucination_score != null) {
+      const score = meta.hallucination_score;
+      const color = score >= 0.8 ? 'var(--green)' : score >= 0.6 ? 'var(--yellow)' : 'var(--red)';
+      const width = Math.round(score * 100);
+      halHtml = `
+        <div class="hal-row">
+          <span class="hal-label">Groundedness</span>
+          <div class="hal-bar-wrap"><div class="hal-bar" style="width:${width}%;background:${color}"></div></div>
+          <span class="hal-label">${(score * 100).toFixed(0)}%</span>
+        </div>`;
+    }
+  }
+
+  div.innerHTML = `
+    <div class="msg-avatar">${avatar}</div>
+    <div class="msg-body">
+      <div class="msg-meta">${label}${metaHtml}</div>
+      <div class="msg-text">${escHtml(text)}</div>
+      ${halHtml}
+    </div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function appendTyping(id) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg assistant'; div.id = id;
+  div.innerHTML = `
+    <div class="msg-avatar">AI</div>
+    <div class="msg-body">
+      <div class="msg-meta">Adaptive RAG</div>
+      <div class="typing"><span></span><span></span><span></span></div>
+    </div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function renderSources(chunks) {
+  const list = document.getElementById('sources-list');
+  list.innerHTML = '';
+  if (!chunks.length) { list.innerHTML = '<div style="padding:20px 12px;text-align:center;color:var(--muted);font-size:12px;font-family:var(--mono);">No sources</div>'; return; }
+  chunks.forEach((c, i) => {
+    const card = document.createElement('div');
+    card.className = 'source-card';
+    const pct = Math.round((c.score || 0) * 100);
+    card.innerHTML = `
+      <div class="source-title">${escHtml(c.title)}</div>
+      <div class="source-meta">
+        <div class="score-bar-wrap"><div class="score-bar" style="width:${pct}%"></div></div>
+        <span class="score-val">${c.score?.toFixed(3)}</span>
+      </div>
+      <div class="source-text">${escHtml((c.text || '').slice(0, 120))}…</div>`;
+    list.appendChild(card);
+    setTimeout(() => card.classList.add('visible'), i * 80);
+  });
+}
+
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Dashboard ─────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  const el = document.getElementById('dash-content');
+  el.innerHTML = '<div class="no-data">Loading...</div>';
+
+  try {
+    const res = await fetch(API + '/eval/summary');
+    const data = await res.json();
+
+    if (data.message) {
+      el.innerHTML = `<div class="no-data">
+        No eval data yet.<br><br>
+        Run: <code>python scripts/run_eval.py --tag naive</code><br>
+        Then: <code>python scripts/run_eval_adaptive.py</code>
+      </div>`;
+      return;
+    }
+
+    const naive = data.naive || {};
+    const adaptive = data.adaptive || {};
+    renderDashboard(el, naive, adaptive);
+  } catch (e) {
+    el.innerHTML = `<div class="no-data">Could not load eval data: ${e.message}</div>`;
+  }
+}
+
+function renderDashboard(el, naive, adaptive) {
+  const hasAdaptive = Object.keys(adaptive).length > 0;
+
+  const metrics = [
+    { key: 'faithfulness',      label: 'Faithfulness',       weight: '35%' },
+    { key: 'answer_relevancy',  label: 'Answer Relevancy',   weight: '30%' },
+    { key: 'context_recall',    label: 'Context Recall',     weight: '20%' },
+    { key: 'context_precision', label: 'Context Precision',  weight: '15%' },
+    { key: 'overall_score',     label: 'Overall Score',      weight: '—' },
+  ];
+
+  // KPI cards
+  const overall_n = naive.overall_score || 0;
+  const overall_a = adaptive.overall_score || 0;
+  const improvement = overall_n ? (((overall_a - overall_n) / overall_n) * 100).toFixed(1) : null;
+  const hal = adaptive.avg_hallucination_score;
+  const lat_n = naive.avg_latency_ms;
+  const lat_a = adaptive.avg_latency_ms;
+
+  let kpiHtml = `<div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-label">Naive Overall</div>
+      <div class="kpi-val">${overall_n ? overall_n.toFixed(3) : '—'}</div>
+      <div class="kpi-delta">${naive.n_samples || 0} samples</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Adaptive Overall</div>
+      <div class="kpi-val" style="color:var(--accent)">${overall_a ? overall_a.toFixed(3) : '—'}</div>
+      <div class="kpi-delta ${improvement > 0 ? 'up' : ''}">${improvement ? '▲ +' + improvement + '%' : 'run adaptive eval'}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Avg Groundedness</div>
+      <div class="kpi-val" style="color:var(--green)">${hal ? (hal * 100).toFixed(0) + '%' : '—'}</div>
+      <div class="kpi-delta">hallucination score</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Latency</div>
+      <div class="kpi-val">${lat_a ? Math.round(lat_a) : '—'}<span style="font-size:14px;color:var(--muted)">ms</span></div>
+      <div class="kpi-delta ${lat_a > lat_n ? 'down' : ''}">${lat_n && lat_a ? 'naive: ' + Math.round(lat_n) + 'ms' : ''}</div>
+    </div>
+  </div>`;
+
+  // Comparison table
+  let tableHtml = `
+    <div class="section-title">Metric Breakdown</div>
+    <table class="comparison-table">
+      <thead><tr>
+        <th>Metric</th><th>Weight</th>
+        <th>Naive RAG</th><th>Adaptive RAG</th><th>Change</th>
+      </tr></thead><tbody>`;
+
+  metrics.forEach(m => {
+    const nv = naive[m.key];
+    const av = adaptive[m.key];
+    const delta = nv && av ? av - nv : null;
+    const deltaStr = delta !== null
+      ? `<span class="delta-val ${delta >= 0 ? 'pos' : 'neg'}">${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(3)}</span>`
+      : '<span class="delta-val" style="color:var(--muted)">—</span>';
+    tableHtml += `<tr>
+      <td class="metric-name">${m.label}</td>
+      <td style="color:var(--muted);font-family:var(--mono);font-size:12px">${m.weight}</td>
+      <td class="naive-val">${nv ? nv.toFixed(3) : '—'}</td>
+      <td class="adaptive-val">${av ? av.toFixed(3) : '—'}</td>
+      <td>${deltaStr}</td>
+    </tr>`;
+  });
+  tableHtml += '</tbody></table>';
+
+  // Retrieval path breakdown
+  const paths = adaptive.retrieval_path_breakdown || {};
+  const total = Object.values(paths).reduce((a, b) => a + b, 0) || 1;
+  let pathHtml = `<div class="section-title">Retrieval Path Breakdown</div>
+    <div class="path-row">
+      <div class="path-card" style="border-color:rgba(61,214,140,.2)">
+        <div class="path-name">Direct</div>
+        <div class="path-count" style="color:var(--green)">${paths.direct || 0}</div>
+        <div class="path-pct">${Math.round(((paths.direct || 0) / total) * 100)}% of queries</div>
+      </div>
+      <div class="path-card" style="border-color:rgba(247,201,72,.2)">
+        <div class="path-name">Rewritten</div>
+        <div class="path-count" style="color:var(--yellow)">${paths.rewritten || 0}</div>
+        <div class="path-pct">${Math.round(((paths.rewritten || 0) / total) * 100)}% of queries</div>
+      </div>
+      <div class="path-card" style="border-color:rgba(247,90,90,.2)">
+        <div class="path-name">Web Fallback</div>
+        <div class="path-count" style="color:var(--red)">${paths.web_fallback || 0}</div>
+        <div class="path-pct">${Math.round(((paths.web_fallback || 0) / total) * 100)}% of queries</div>
+      </div>
+    </div>`;
+
+  // Charts
+  let chartsHtml = `<div class="section-title">Score Comparison</div>
+    <div class="chart-row">
+      <div class="chart-card"><canvas id="radar-chart"></canvas></div>
+      <div class="chart-card"><canvas id="bar-chart"></canvas></div>
+    </div>`;
+
+  el.innerHTML = kpiHtml + tableHtml + pathHtml + chartsHtml;
+
+  // Render charts after DOM update
+  setTimeout(() => {
+    const labels = ['Faithfulness', 'Relevancy', 'Recall', 'Precision'];
+    const naiveVals = [naive.faithfulness, naive.answer_relevancy, naive.context_recall, naive.context_precision].map(v => v || 0);
+    const adaptVals = [adaptive.faithfulness, adaptive.answer_relevancy, adaptive.context_recall, adaptive.context_precision].map(v => v || 0);
+
+    destroyChart('radar-chart');
+    destroyChart('bar-chart');
+
+    chartInstances['radar-chart'] = new Chart(document.getElementById('radar-chart'), {
+      type: 'radar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Naive RAG', data: naiveVals, borderColor: '#6b7494', backgroundColor: 'rgba(107,116,148,.1)', pointBackgroundColor: '#6b7494' },
+          { label: 'Adaptive RAG', data: adaptVals, borderColor: '#4f8ef7', backgroundColor: 'rgba(79,142,247,.15)', pointBackgroundColor: '#4f8ef7' },
+        ]
+      },
+      options: {
+        scales: { r: { min: 0, max: 1, ticks: { display: false }, grid: { color: '#232940' }, pointLabels: { color: '#6b7494', font: { size: 11 } } } },
+        plugins: { legend: { labels: { color: '#6b7494', font: { size: 11 } } } },
+      }
+    });
+
+    chartInstances['bar-chart'] = new Chart(document.getElementById('bar-chart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Naive RAG', data: naiveVals, backgroundColor: 'rgba(107,116,148,.4)', borderRadius: 4 },
+          { label: 'Adaptive RAG', data: adaptVals, backgroundColor: 'rgba(79,142,247,.6)', borderRadius: 4 },
+        ]
+      },
+      options: {
+        scales: {
+          y: { min: 0, max: 1, grid: { color: '#232940' }, ticks: { color: '#6b7494', font: { size: 11 } } },
+          x: { grid: { display: false }, ticks: { color: '#6b7494', font: { size: 11 } } }
+        },
+        plugins: { legend: { labels: { color: '#6b7494', font: { size: 11 } } } },
+      }
+    });
+  }, 50);
+}
+
+function destroyChart(id) {
+  if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; }
+}
+</script>
+</body>
+</html>

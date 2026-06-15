@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Week 1 — chunker tests
+        run: python tests/test_chunker.py
+
+      - name: Run Week 2 — adaptive pipeline tests
+        run: python tests/test_adaptive.py
+
+      - name: Run Week 3 — API tests
+        run: python tests/test_api.py
+
+      - name: Run Week 4 — integration tests
+        run: python tests/test_integration.py
+
+      - name: Check import hygiene
+        run: |
+          python -c "
+          from config import cfg
+          from src.models import Paper, Chunk, RetrievedChunk, QueryResult
+          from src.ingestion.fetcher import ArxivFetcher
+          from src.ingestion.chunker import DocumentChunker
+          from src.ingestion.semantic_chunker import SemanticChunker
+          from src.ingestion.embedder import Embedder
+          from src.retrieval.vector_store import VectorStore
+          from src.retrieval.retriever import NaiveRetriever
+          from src.retrieval.grader import RetrievalGrader
+          from src.retrieval.rewriter import QueryRewriter
+          from src.retrieval.web_fallback import WebSearchFallback
+          from src.generation.generator import GeminiGenerator
+          from src.generation.hallucination import HallucinationDetector
+          from src.pipeline import NaiveRAGPipeline
+          from src.adaptive_pipeline import AdaptiveRAGPipeline
+          from src.factory import build_naive_pipeline, build_adaptive_pipeline
+          from src.evaluation.evaluator import RAGEvaluator
+          from src.api.query_logger import init_db
+          print('All imports OK')
+          "

@@ -1,0 +1,15 @@
+{
+  "tag": "naive",
+  "n_samples": 3,
+  "faithfulness": 0.0,
+  "answer_relevancy": 0.0,
+  "context_recall": 0.0,
+  "context_precision": 0.0,
+  "overall_score": 0.0,
+  "avg_hallucination_score": 1.0,
+  "avg_latency_ms": 46.62476666665801,
+  "avg_chunks_retrieved": 0.0,
+  "retrieval_path_breakdown": {
+    "direct": 3
+  }
+}

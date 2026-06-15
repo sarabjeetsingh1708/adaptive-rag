@@ -1,0 +1,27 @@
+# Core
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+pydantic==2.7.1
+python-dotenv==1.0.1
+
+# ArXiv ingestion
+arxiv==2.1.0
+pymupdf==1.24.4          # PDF parsing (for scripts/fetch_pdfs.py Week 2)
+requests==2.31.0
+
+# Embeddings
+sentence-transformers==3.0.1
+numpy==1.26.4
+
+# Vector DB
+qdrant-client==1.9.1
+
+# LLM
+google-genai>=1.0.0
+
+# Evaluation
+pandas==2.2.2
+
+# Dev / testing
+pytest==8.2.0
+httpx==0.27.0            # for FastAPI test client

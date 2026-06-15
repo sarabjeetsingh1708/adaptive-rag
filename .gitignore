@@ -1,0 +1,28 @@
+# Secrets
+.env
+.env.example
+# Data (too large for git — use DVC or document in README how to regenerate)
+data/raw/
+data/processed/
+qdrant_data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Eval outputs (commit summaries, not raw CSVs)
+evals/*.csv
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

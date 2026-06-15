@@ -1,0 +1,38 @@
+# fly.toml — Adaptive RAG deployment
+# Deploy with: fly deploy
+# First time: fly launch (then replace fly.toml with this file)
+
+app = "adaptive-rag"          # change to your app name
+primary_region = "sin"        # Singapore — closest to India
+
+[build]
+
+[env]
+  PORT = "8000"
+  QDRANT_HOST = "localhost"   # Qdrant runs as a sidecar process on Fly
+  QDRANT_PORT = "6333"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true   # free tier — stops when idle
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 25
+    soft_limit = 20
+
+[[vm]]
+  size = "shared-cpu-1x"      # free tier
+  memory = "512mb"
+
+# Persistent volume for Qdrant data
+[[mounts]]
+  source = "qdrant_data"
+  destination = "/app/qdrant_data"
+
+[processes]
+  # Start both Qdrant and the FastAPI app
+  app = "bash scripts/start_services.sh"
